@@ -12,8 +12,7 @@ HPF hpf;
 SqrOsc subVoice1 => hpf => master;
 SqrOsc subVoice2 => hpf => master;
 
-master => ADSR adsr => LPF lpf => Echo delay => Pan2 stereo => dac;
-delay => Gain feedback => delay;
+master => ADSR adsr => LPF lpf => Pan2 stereo => dac;
 
 ///
 
@@ -24,14 +23,8 @@ Std.mtof(25) => hpf.freq;
 .8 => lpf.Q;
 .8 => lpf.gain;
 
-tempo.eighthNote => delay.delay;
-tempo.eighthNote * 1.025 => delay.max;
-.15 => delay.mix;
-
 .5 => voice1.gain => voice2.gain, voice3.gain, voice4.gain;
 .5 => subVoice1.gain => subVoice2.gain;
-
-.2 => feedback.gain;
 
 /// 
 
@@ -46,7 +39,7 @@ tempo.eighthNote * 1.025 => delay.max;
     0, 0, 1,
     0, 0, 1,
     0, 1, 1
-] @=> int harmony[];
+] @=> int harmonies[];
 [
     tempo.note, tempo.note, tempo.note * 2,
     tempo.note, tempo.note, tempo.note * 2,
@@ -55,13 +48,51 @@ tempo.eighthNote * 1.025 => delay.max;
 ] @=> dur durations[];
 48 => int key;
 
-1.0 / 8.0 => float maxVolume;
+1.0 / 6.0 => float maxVolume;
 
 float masterVolume;
 float cutOff;
+dur delayTime;
 float stereoPan;
 
 ///
+
+function void swipeVolume(Gain master, dur t, float min, float max, float step, int riseVolume) {
+    step => float crement;
+    max - min => float range;
+    (range / step) => float stepNumber;
+
+    if (riseVolume) {
+        min => masterVolume;
+    }
+    else {
+        max => masterVolume;
+    }
+
+    while(true) {
+        masterVolume => master.gain;
+        masterVolume + crement => masterVolume;
+
+        if (riseVolume) {
+            if (masterVolume <= max) {
+                step => crement;
+            }
+            else {
+                0 => crement;
+            }
+        }
+        else {
+            if (masterVolume >= min) {
+                step * -1 => crement;
+            }
+            else {
+                0 => crement;
+            }
+        }
+        
+        t / stepNumber => now;
+    }
+}
 
 function void riseVolume(Gain mater, dur t, float min, float max, float step) {
     step => float crement;
@@ -112,7 +143,35 @@ function void swipeFilter(LPF filter, dur t, float min, float max, float step) {
         }
         else if (cutOff <= min) {
             step => crement;
-        }        
+        }              
+
+        t / stepNumber => now;
+    }
+}
+function void swipeDelay(Echo delay, dur t, dur min, dur max, dur step) {
+    step => dur crement;
+    max - min => dur range;
+    (range / step) * 2 => float stepNumber;
+
+    min => delayTime;
+
+    /* .5 => delay.mix;
+    .5 => feedback.gain; */
+
+    while(true) {
+        delayTime => delay.delay;
+        delayTime * 2 => delay.max;
+
+        delayTime + crement => delayTime;
+
+        if (delayTime >= max) {
+            step * -1 => crement;
+        }
+        else if (delayTime <= min) {
+            step => crement;
+        }
+
+        <<< delayTime >>>;
 
         t / stepNumber => now;
     }
@@ -155,7 +214,7 @@ function void runPad() {
             }
             else {
                 1.0 => sustain;
-                durations[step] * .8 => release;
+                durations[step] * .6 => release;
             }            
 
             adsr.set(attack, decay, sustain, release);
@@ -166,7 +225,7 @@ function void runPad() {
 
             Std.mtof(rootNote) => voice1.freq;
             
-            if (!harmony[step]) {
+            if (!harmonies[step]) {
                 Std.mtof(rootNote + 3) => voice2.freq;
             }
             else {
@@ -175,7 +234,7 @@ function void runPad() {
 
             Std.mtof(rootNote + 7) => voice3.freq;
             
-            if (!harmony[step]) {
+            if (!harmonies[step]) {
                 Std.mtof(rootNote + 10) => voice4.freq;
             }
             else {
@@ -194,47 +253,44 @@ function void runPad() {
 }
 
 ///
-// 72
+// 96 bars
 
-Shred padShred, volumeShred, filterShred, stereoShred;
+Shred padShred, volumeShred, filterShred, delayShred, stereoShred;
 
-spork ~ riseVolume(master, tempo.note * 4, .0, maxVolume, .01) @=> volumeShred;
-spork ~ panStereo(stereo, tempo.quarterNote, -.25, .25, .1) @=> stereoShred;
-spork ~ swipeFilter(lpf, tempo.note / 3, Std.mtof(20), Std.mtof(75), 20.0) @=> filterShred;
+spork ~ swipeVolume(master, tempo.note * 16, .0, maxVolume, .001, 1) @=> volumeShred;
+spork ~ panStereo(stereo, tempo.quarterNote, -.25, .25, .01) @=> stereoShred;
+spork ~ swipeFilter(lpf, tempo.note, Std.mtof(20), Std.mtof(75), 20.0) @=> filterShred;
 spork ~ runPad() @=> padShred;
-tempo.note * 4 => now;
+tempo.note * 16 => now;
 
 Machine.remove(volumeShred.id());
 tempo.note * 16 => now;
 
 Machine.remove(stereoShred.id());
 Machine.remove(filterShred.id());
-spork ~ panStereo(stereo, tempo.quarterNote / 2, -.4, .25, .1) @=> stereoShred;
-spork ~ swipeFilter(lpf, tempo.note / 3, Std.mtof(20), Std.mtof(85), 20.0) @=> filterShred;
+spork ~ panStereo(stereo, tempo.quarterNote, -.4, .25, .01) @=> stereoShred;
+spork ~ swipeFilter(lpf, tempo.note, Std.mtof(20), Std.mtof(85), 20.0) @=> filterShred;
+tempo.note * 16 => now;
+
+
+Machine.remove(stereoShred.id());
+Machine.remove(filterShred.id());
+spork ~ panStereo(stereo, tempo.quarterNote, -.6, .75, .01) @=> stereoShred;
+spork ~ swipeFilter(lpf, tempo.note, Std.mtof(20), Std.mtof(90), 20.0) @=> filterShred;
+tempo.note * 16 => now;
+
+Machine.remove(filterShred.id());
+spork ~ swipeFilter(lpf, tempo.note / 2, Std.mtof(20), Std.mtof(80), 10.0) @=> filterShred;
 tempo.note * 16 => now;
 
 Machine.remove(stereoShred.id());
 Machine.remove(filterShred.id());
-spork ~ panStereo(stereo, tempo.quarterNote / 3, -.75, .5, .1) @=> stereoShred;
-tempo.note * 4 => now;
-
-Machine.remove(stereoShred.id());
-spork ~ panStereo(stereo, tempo.quarterNote / 2, -.6, .75, .1) @=> stereoShred;
-spork ~ swipeFilter(lpf, tempo.note / 3, Std.mtof(20), Std.mtof(90), 20.0) @=> filterShred;
-tempo.note * 12 => now;
-
-Machine.remove(filterShred.id());
-spork ~ swipeFilter(lpf, tempo.note / 3, Std.mtof(20), Std.mtof(80), 20.0) @=> filterShred;
+spork ~ panStereo(stereo, tempo.quarterNote, -.4, .25, .1) @=> stereoShred;
+spork ~ swipeFilter(lpf, tempo.note, Std.mtof(20), Std.mtof(72), 20.0) @=> filterShred;
 tempo.note * 8 => now;
 
-Machine.remove(stereoShred.id());
-Machine.remove(filterShred.id());
-spork ~ panStereo(stereo, tempo.quarterNote / 2, -.4, .25, .1) @=> stereoShred;
-spork ~ swipeFilter(lpf, tempo.note / 3, Std.mtof(20), Std.mtof(72), 20.0) @=> filterShred;
+spork ~ swipeVolume(master, tempo.note * 4, 0, master.gain(), .001, 0) @=> volumeShred;
 tempo.note * 8 => now;
-
-spork ~ lowerVolume(master, tempo.note * 4, .0, master.gain(), .01) @=> volumeShred;
-tempo.note * 4 => now;
 Machine.remove(volumeShred.id());
 Machine.remove(filterShred.id());
 Machine.remove(padShred.id());
