@@ -14,8 +14,6 @@ rimDelay => Gain rimDelayFeedback => rimDelay;
 
 master => dac;
 
-Shred kickSh, snareSh, clapSh, clavesSh, maracasSh, closedHatSh, openHatSh, rimSh;
-
 ///
 
 me.dir(-1) + "audio/kick.wav" => kick.read;
@@ -49,53 +47,64 @@ tempo.eighthNote => rimDelay.max;
 
 .3 => rimDelayFeedback.gain;
 
+1 => master.gain;
+
 ///
 
-[   1, 0, 0, 0,
+[
+    1, 0, 0, 0,
     1, 0, 0, 0,
     1, 0, 0, 0,
     1, 0, 0, 0
 ] @=> int kickPattern[];
-[   1, 0, 0, 0,
+[
+    1, 0, 0, 0,
     1, 0, 0, 0,
     1, 0, 0, 1,
     1, 0, 1, 0
 ] @=> int kickPatternAccent[];
 
-[   0, 0, 0, 0,
+[
+    0, 0, 0, 0,
     1, 0, 0, 0,
     0, 0, 0, 0,
     1, 0, 0, 0
 ] @=> int snarePattern[];
-[   0, 0, 0, 0,
+[
+    0, 0, 0, 0,
     0, 0, 0, 1,
     0, 0, 0, 0,
     0, 0, 0, 0
 ] @=> int clapPattern[];
 
-[   0, 0, 0, 1,
+[
+    0, 0, 0, 1,
     0, 0, 0, 0,
     0, 0, 1, 1,
     0, 1, 0, 0
 ] @=> int clavesPattern[];
-[   0, 1, 0, 1,
+[
+    0, 1, 0, 1,
     0, 1, 0, 1,
     0, 1, 0, 1,
     0, 1, 0, 1
 ] @=> int maracasPattern[];
 
-[   1, 1, 1, 1,
+[
+    1, 1, 1, 1,
     1, 1, 1, 1,
     1, 1, 1, 1,
     1, 1, 1, 1
 ] @=> int closedHatPattern[];
-[   0, 0, 1, 0,
+[
+    0, 0, 1, 0,
     0, 0, 1, 0,
     0, 0, 1, 0,
     0, 0, 1, 0
 ] @=> int openHatPattern[];
 
-[   0, 0, 1, 0,
+[
+    0, 0, 1, 0,
     0, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 0, 0
@@ -131,27 +140,18 @@ function void runSnare(int beatLength, int sequence[], dur stepDuration, int all
 }
 function void runClap(int beatLength, int sequence[], dur stepDuration, int allowAccent) {
     while(true) {
-        for (0 => int beat; beat < beatLength; beat++) {
-            for (0 => int step; step < sequence.cap(); step++) {
+        for (0 => int beat; beat < beatLength; beat++) {            
+            for (0 => int step; step < sequence.cap(); step++) {                
                 if (sequence[step]) {
                     1.0 => clap.rate;
                     0 => clap.pos;
                 }
-
-                // if accent on
+                
                 if (allowAccent) {
                     1.2 => clap.rate;
-
-                    // random clap on every 2nd beat                    
-                    if (beat % 2 == 1) {
-                        if (step == sequence.cap() - 3 && Math.random2(0, 1)) {
-                            0 => clap.pos;
-                        }
-                    }
-                    
-                    // end tripplets
-                    if (beat == beatLength - 1 && step >= sequence.cap() - 4) {
-                        Math.random2(10, 30) => clap.pos;
+                                     
+                    if (beat == 0 && step == 1) {
+                        0 => clap.pos;
                     }
                 }
                 
@@ -191,7 +191,31 @@ function void runClosedHat(int beatLength, int sequence[], dur stepDuration, int
         for (0 => int beat; beat < beatLength; beat++) {
             for (0 => int step; step < sequence.cap(); step++) {
                 if (sequence[step]) {
+                    1 => closedHat.rate;
                     0 => closedHat.pos;
+                }
+
+                if (allowAccent) {
+                    if (beat % 2 == 1 && step == 1) {
+                        for (0 => int repetition; repetition < 2; repetition++) {                         
+                            Math.random2(0, 5) => closedHat.pos;
+
+                            stepDuration / 2 => now;
+                        }
+
+                        continue;
+                    }
+
+                    if (beat == beatLength - 1 && step >= sequence.cap() - 2) {
+                        for (0 => int repetition; repetition < 2; repetition++) {
+                            closedHat.rate() - .2 => closedHat.rate;
+                            Math.random2(0, 20) => closedHat.pos;
+
+                            stepDuration / 2 => now;
+                        }
+
+                        continue;
+                    }
                 }
 
                 stepDuration => now;
@@ -205,7 +229,7 @@ function void runOpenHat(int beatLength, int sequence[], dur stepDuration, int a
             for (0 => int step; step < sequence.cap(); step++) {
                 if (sequence[step]) {
                     0 => openHat.pos;
-                }
+                }                
 
                 stepDuration => now;
             }
@@ -227,43 +251,43 @@ function void runRim(int beatLength, int sequence[], dur stepDuration, int allow
 }
 
 ///
+// 73 bars
 
-/* spork ~ runKick(4, kickPattern, tempo.sixteenthNote, 0) @=> kickSh;
-spork ~ runSnare(4, snarePattern, tempo.sixteenthNote, 0) @=> snareSh;
-spork ~ runClosedHat(4, closedHatPattern, tempo.sixteenthNote, 0) @=> closedHatSh;
-spork ~ runClap(4, clapPattern, tempo.sixteenthNote, 1) @=> clapSh;
-spork ~ runClaves(4, clavesPattern, tempo.sixteenthNote, 0) @=> clavesSh;
-spork ~ runMaracas(4, maracasPattern, tempo.sixteenthNote, 0) @=> maracasSh;
-spork ~ runOpenHat(4, openHatPattern, tempo.sixteenthNote, 0) @=> openHatSh;
-spork ~ runRim(4, rimPattern, tempo.sixteenthNote, 0) @=> rimSh;
-tempo.note * 1000 => now; */
+Shred kickShred, snareShred, clapShred, clavesShred, maracasShred;
+Shred closedHatShred, openHatShred, rimShred;
 
+/* spork ~ runKick(4, kickPattern, tempo.sixteenthNote, 0) @=> kickShred;
+spork ~ runSnare(4, snarePattern, tempo.sixteenthNote, 0) @=> snareShred;
+spork ~ runClap(4, clapPattern, tempo.sixteenthNote, 1) @=> clapShred;
+spork ~ runClosedHat(4, closedHatPattern, tempo.sixteenthNote, 1) @=> closedHatShred;
+spork ~ runOpenHat(4, openHatPattern, tempo.sixteenthNote, 0) @=> openHatShred;
 
-spork ~ runKick(4, kickPattern, tempo.sixteenthNote, 0) @=> kickSh;
+while(true) {
+    second => now;
+} */
+
+//
+
+spork ~ runKick(4, kickPattern, tempo.sixteenthNote, 0) @=> kickShred;
 tempo.note * 4 => now;
-spork ~ runSnare(4, snarePattern, tempo.sixteenthNote, 0) @=> snareSh;
+spork ~ runSnare(4, snarePattern, tempo.sixteenthNote, 0) @=> snareShred;
 tempo.note * 4 => now;
-spork ~ runClosedHat(4, closedHatPattern, tempo.sixteenthNote, 0) @=> closedHatSh;
-spork ~ runClap(4, clapPattern, tempo.sixteenthNote, 0) @=> clapSh;
+spork ~ runClosedHat(4, closedHatPattern, tempo.sixteenthNote, 0) @=> closedHatShred;
+tempo.note * 20 => now;
+spork ~ runOpenHat(4, openHatPattern, tempo.sixteenthNote, 0) @=> openHatShred;
+spork ~ runClap(4, clapPattern, tempo.sixteenthNote, 1) @=> clapShred;
 tempo.note * 16 => now;
-spork ~ runClaves(4, clavesPattern, tempo.sixteenthNote, 0) @=> clavesSh;
-spork ~ runMaracas(4, maracasPattern, tempo.sixteenthNote, 0) @=> maracasSh;
-tempo.note * 8 => now;
-spork ~ runOpenHat(4, openHatPattern, tempo.sixteenthNote, 0) @=> openHatSh;
-spork ~ runRim(4, rimPattern, tempo.sixteenthNote, 0) @=> rimSh;
-
-<<< "all drums added" >>>;
-tempo.note * 8 => now;
-
-Machine.remove(rimSh.id());
-Machine.remove(openHatSh.id());
+spork ~ runRim(4, rimPattern, tempo.sixteenthNote, 0) @=> rimShred;
+spork ~ runClaves(4, clavesPattern, tempo.sixteenthNote, 0) @=> clavesShred;
+tempo.note * 16 => now;
+Machine.remove(rimShred.id());
 tempo.note * 4 => now;
-Machine.remove(maracasSh.id());
-Machine.remove(clavesSh.id());
+Machine.remove(openHatShred.id());
+Machine.remove(clavesShred.id());
 tempo.note * 4 => now;
-Machine.remove(clapSh.id());
-Machine.remove(closedHatSh.id());
+Machine.remove(closedHatShred.id());
 tempo.note * 4 => now;
-Machine.remove(snareSh.id());
-tempo.note * 4 => now;
-Machine.remove(kickSh.id());
+Machine.remove(snareShred.id());
+Machine.remove(clapShred.id());
+tempo.note => now;
+Machine.remove(kickShred.id());
